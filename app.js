@@ -68,6 +68,9 @@
     channelSearch: '',
     selectedRegion: 'World',
     radarBase: true,
+    lightningRefreshTimer: null,
+    meteoAlarmRequest: null,
+    _meteoAlarmData: null,
   };
 
   function loadPreferences() {
@@ -80,6 +83,7 @@
         units: stored.units === 'fahrenheit' ? 'fahrenheit' : 'celsius',
         notify: { tornado: true, thunderstorm: true, flood: true, severe: true, ...(stored.notify || {}) },
         polling: [120000, 300000, 600000].includes(stored.polling) ? stored.polling : 120000,
+        mapOverlays: { spc: false, meteoalarm: false, lightning: false, ...(stored.mapOverlays || {}) },
       };
     } catch { return { location: null, theme: 'midnight', accent: DEFAULT_ACCENT, units: 'celsius', notify: { tornado: true, thunderstorm: true, flood: true, severe: true }, polling: 120000 }; }
   }
@@ -419,9 +423,18 @@
       base.addTo(map);
       map._atmosBaseLayer = base;
       map._atmosRadarLayer = null;
+      map._atmosSPCLayer = null;
+      map._atmosMeteoAlarmLayer = null;
+      map._atmosLightningLayer = null;
       app.maps[id] = map;
     }
     loadRadarFrames();
+    $$('[data-overview-overlay]').forEach(button => {
+      const key = button.dataset.overviewOverlay;
+      const enabled = Boolean(app.preferences.mapOverlays && app.preferences.mapOverlays[key]);
+      setOverviewOverlayButton(key, enabled);
+      if (enabled) window.setTimeout(() => setOverviewOverlay(key, true, { persist: false }), 0);
+    });
   }
 
   async function loadRadarFrames() {
@@ -462,6 +475,148 @@
       map._atmosRadarLayer = L.tileLayer(`${host}${path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: .68, maxZoom: 7, tileSize: 256, attribution: '<a href="https://www.rainviewer.com/">Weather data by RainViewer</a>' });
       map._atmosRadarLayer.addTo(map);
       if (map._atmosRadarLayer.bringToFront) map._atmosRadarLayer.bringToFront();
+    }
+    bringOverviewOverlaysToFront();
+  }
+
+  function bringOverviewOverlaysToFront() {
+    const map = app.maps['overview-map'];
+    if (!map) return;
+    ['_atmosSPCLayer', '_atmosMeteoAlarmLayer', '_atmosLightningLayer'].forEach(key => {
+      const layer = map[key];
+      if (layer && map.hasLayer(layer) && typeof layer.bringToFront === 'function') layer.bringToFront();
+    });
+  }
+
+  function setOverviewOverlayButton(key, enabled, stateText) {
+    const button = $(`[data-overview-overlay="${key}"]`);
+    if (button) {
+      button.classList.toggle('active', Boolean(enabled));
+      button.setAttribute('aria-pressed', String(Boolean(enabled)));
+    }
+    const state = $(`[data-overlay-state="${key}"]`);
+    if (state && stateText) state.textContent = stateText;
+    else if (state) state.textContent = enabled ? 'ON' : 'OFF';
+  }
+
+  function setOverlayStatus(message) {
+    const node = $('#overview-overlay-status');
+    if (node) node.textContent = message;
+  }
+
+  function spcOverlayFor(map) {
+    if (!window.L.esri || typeof window.L.esri.dynamicMapLayer !== 'function') {
+      throw new Error('The NOAA map layer library did not load. Refresh the page and try again.');
+    }
+    if (!map._atmosSPCLayer) {
+      map._atmosSPCLayer = L.esri.dynamicMapLayer({
+        url: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer',
+        layers: [1], opacity: 0.67,
+        attribution: '<a href="https://www.spc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS Storm Prediction Center</a>'
+      });
+      map._atmosSPCLayer.on('requesterror', () => {
+        setOverviewOverlayButton('spc', true, 'ERROR');
+        setOverlayStatus('The NOAA SPC map service could not be reached. Check the official SPC page for the current outlook.');
+      });
+    }
+    return map._atmosSPCLayer;
+  }
+
+  const METEO_COLORS = { extreme: '#d94a54', red: '#d94a54', severe: '#ed824c', orange: '#ed824c', moderate: '#e1bd4e', yellow: '#e1bd4e' };
+  function meteoAlarmStyle(feature) {
+    const level = String(feature?.properties?.severity || feature?.properties?.awarenessLevel || '').toLowerCase();
+    const color = Object.entries(METEO_COLORS).find(([key]) => level.includes(key))?.[1] || '#dfab52';
+    return { color, weight: 2, opacity: .9, fillColor: color, fillOpacity: .2 };
+  }
+
+  function makeMeteoAlarmLayer(data) {
+    return L.geoJSON(data, {
+      style: meteoAlarmStyle,
+      pointToLayer: (_feature, latlng) => L.circleMarker(latlng, { radius: 6, color: '#e1bd4e', fillColor: '#e1bd4e', fillOpacity: .78, weight: 1.5 }),
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties || {};
+        const safeTitle = escapeHTML(p.title || p.event || 'Weather warning');
+        const safeCountry = escapeHTML(p.country || 'MeteoAlarm member country');
+        const safeSeverity = escapeHTML(p.severity || 'Level not supplied');
+        const safeArea = escapeHTML(p.area || 'Area not specified');
+        const safeTimes = [p.effective ? `Effective: ${escapeHTML(p.effective)}` : '', p.expires ? `Expires: ${escapeHTML(p.expires)}` : ''].filter(Boolean).join('<br>');
+        const href = typeof p.url === 'string' && /^https:\/\//i.test(p.url) ? p.url : 'https://www.meteoalarm.org/en/live/';
+        layer.bindPopup(`<div class="map-popup"><b>${safeTitle}</b><br>${safeCountry}<br><strong>Severity:</strong> ${safeSeverity}<br><strong>Area:</strong> ${safeArea}${safeTimes ? `<br>${safeTimes}` : ''}<br><a href="${escapeHTML(href)}" target="_blank" rel="noopener">Open warning source ↗</a></div>`);
+      }
+    });
+  }
+
+  async function refreshLightningOverlay() {
+    const map = app.maps['overview-map'];
+    if (!map || !app.preferences.mapOverlays?.lightning) return;
+    if (map._atmosLightningLayer) map.removeLayer(map._atmosLightningLayer);
+    const tick = Math.floor(Date.now() / 1000);
+    const layer = L.tileLayer(`https://tiles.lightningmaps.org/?x={x}&y={y}&z={z}&s=256&t=5&T=${tick}`, {
+      minZoom: 2, maxZoom: 12, tileSize: 256, opacity: .92,
+      attribution: '<a href="https://www.lightningmaps.org/" target="_blank" rel="noopener">LightningMaps.org / Blitzortung community detections</a>'
+    });
+    layer.on('tileerror', () => {
+      setOverviewOverlayButton('lightning', true, 'CHECK');
+      setOverlayStatus('LightningMaps tiles could not be loaded just now. The community feed can change; try again or open LightningMaps directly.');
+    });
+    map._atmosLightningLayer = layer;
+    layer.addTo(map);
+    bringOverviewOverlaysToFront();
+  }
+
+  async function setOverviewOverlay(key, enabled, options = {}) {
+    const map = app.maps['overview-map'];
+    if (!map || !['spc', 'meteoalarm', 'lightning'].includes(key)) return;
+    if (!app.preferences.mapOverlays) app.preferences.mapOverlays = { spc: false, meteoalarm: false, lightning: false };
+    app.preferences.mapOverlays[key] = Boolean(enabled);
+    if (options.persist !== false) savePreferences();
+    setOverviewOverlayButton(key, enabled, enabled ? 'ON' : 'OFF');
+
+    if (!enabled) {
+      const layerKey = { spc: '_atmosSPCLayer', meteoalarm: '_atmosMeteoAlarmLayer', lightning: '_atmosLightningLayer' }[key];
+      const layer = map[layerKey];
+      if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+      if (key === 'lightning' && app.lightningRefreshTimer) { clearInterval(app.lightningRefreshTimer); app.lightningRefreshTimer = null; }
+      setOverlayStatus('Overlays can be combined. SPC is U.S.-only; MeteoAlarm covers participating European countries; lightning is a community detection layer.');
+      return;
+    }
+
+    try {
+      if (key === 'spc') {
+        spcOverlayFor(map).addTo(map);
+        bringOverviewOverlaysToFront();
+        setOverviewOverlayButton(key, true, 'ON');
+        setOverlayStatus('Showing NOAA/SPC Day 1 categorical outlook over the United States. This layer does not cover other countries.');
+      } else if (key === 'meteoalarm') {
+        setOverviewOverlayButton(key, true, 'LOAD');
+        setOverlayStatus('Loading active MeteoAlarm warning areas from official participating-country feeds…');
+        if (!app._meteoAlarmData) {
+          if (!app.meteoAlarmRequest) app.meteoAlarmRequest = api('meteoalarm').then(data => { app._meteoAlarmData = data; return data; }).finally(() => { app.meteoAlarmRequest = null; });
+          await app.meteoAlarmRequest;
+        }
+        if (!app.preferences.mapOverlays.meteoalarm) return;
+        const data = app._meteoAlarmData;
+        if (!data?.features?.length) {
+          setOverviewOverlayButton(key, true, 'EMPTY');
+          setOverlayStatus(data?.message || `MeteoAlarm returned no map areas (${data?.failedFeeds ?? 'unknown'} feeds unavailable). Use the official MeteoAlarm map for full details.`);
+          return;
+        }
+        if (map._atmosMeteoAlarmLayer) map.removeLayer(map._atmosMeteoAlarmLayer);
+        map._atmosMeteoAlarmLayer = makeMeteoAlarmLayer({ type: 'FeatureCollection', features: data.features });
+        map._atmosMeteoAlarmLayer.addTo(map);
+        bringOverviewOverlaysToFront();
+        setOverviewOverlayButton(key, true, String(data.features.length));
+        setOverlayStatus(`MeteoAlarm: ${data.features.length} active warning area(s) mapped; ${data.failedFeeds} country feed(s) could not be checked. Feeds can lag; follow official instructions.`);
+      } else if (key === 'lightning') {
+        await refreshLightningOverlay();
+        if (!app.lightningRefreshTimer) app.lightningRefreshTimer = window.setInterval(refreshLightningOverlay, 30000);
+        setOverviewOverlayButton(key, true, 'LIVE');
+        setOverlayStatus('LightningMaps/Blitzortung community detections are approximate and are not official safety warnings. Tile availability may vary.');
+      }
+    } catch (error) {
+      setOverviewOverlayButton(key, true, 'ERROR');
+      setOverlayStatus(`${key === 'spc' ? 'SPC' : key === 'meteoalarm' ? 'MeteoAlarm' : 'Lightning'} overlay unavailable: ${error.message}`);
+      toast('Map overlay unavailable', error.message, 'warning');
     }
   }
 
@@ -566,6 +721,7 @@
       updateLocationUI(); centerMaps([20, 0], 2); toast('Location cleared', 'Your saved location was removed from this browser.');
     });
     $$('[data-map-layer]').forEach(button => button.addEventListener('click', () => setMapLayer(button.dataset.mapLayer)));
+    $$('[data-overview-overlay]').forEach(button => button.addEventListener('click', () => { const key = button.dataset.overviewOverlay; setOverviewOverlay(key, !app.preferences.mapOverlays?.[key]); }));
     $('#map-home').addEventListener('click', () => centerMaps([20, 0], 2));
     $('#radar-refresh').addEventListener('click', loadRadarFrames);
     $('#radar-timeline').addEventListener('input', event => { if (app.radarPlaying) toggleRadarAnimation(); showRadarFrame(event.target.value); });
