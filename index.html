@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/styles.css">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script defer src="https://unpkg.com/esri-leaflet@3.0.15/dist/esri-leaflet.js" crossorigin=""></script>
   <script defer src="/app.js"></script>
 </head>
 <body>
@@ -103,8 +104,23 @@
               <div class="map-mode-group"><button class="map-mode active" data-map-layer="radar">Radar</button><button class="map-mode" data-map-layer="base">Base map</button></div>
               <div class="map-toolbar-right"><span class="map-data-status"><i></i><span id="radar-status">Loading radar frames</span></span><button class="mini-tool" id="map-home" title="Return to world view">◎ World</button></div>
             </div>
-            <div id="overview-map" class="leaflet-map" aria-label="Worldwide weather radar map"></div>
-            <div class="map-legend-row"><span class="legend-title">REFLECTIVITY</span><span class="legend-gradient"></span><span class="legend-label">Light</span><span class="legend-label">Moderate</span><span class="legend-label">Heavy</span><span class="legend-label legend-extreme">Extreme</span><span class="map-credit">Map © OpenStreetMap · Radar © RainViewer</span></div>
+            <div class="map-overlay-bar" aria-label="Overview map overlays">
+              <div class="map-overlay-heading"><strong>OVERLAYS</strong><span>Toggle layers on this map</span></div>
+              <div class="map-overlay-toggles">
+                <button class="map-overlay-toggle" type="button" data-overview-overlay="spc" aria-pressed="false" title="Show the official NOAA/SPC Day 1 categorical convective outlook over the United States">
+                  <span class="overlay-swatch overlay-swatch-spc"></span><span class="overlay-toggle-label">SPC outlook <small>USA · Day 1</small></span><span class="overlay-state" data-overlay-state="spc">OFF</span>
+                </button>
+                <button class="map-overlay-toggle" type="button" data-overview-overlay="meteoalarm" aria-pressed="false" title="Show active warning areas from MeteoAlarm country feeds across Europe">
+                  <span class="overlay-swatch overlay-swatch-meteo"></span><span class="overlay-toggle-label">MeteoAlarm <small>Europe warnings</small></span><span class="overlay-state" data-overlay-state="meteoalarm">OFF</span>
+                </button>
+                <button class="map-overlay-toggle" type="button" data-overview-overlay="lightning" aria-pressed="false" title="Show the community LightningMaps/Blitzortung lightning strike overlay">
+                  <span class="overlay-swatch overlay-swatch-lightning">ϟ</span><span class="overlay-toggle-label">Lightning <small>Global community network</small></span><span class="overlay-state" data-overlay-state="lightning">OFF</span>
+                </button>
+              </div>
+            </div>
+            <div id="overview-map" class="leaflet-map" aria-label="Worldwide weather radar map with optional SPC, MeteoAlarm and lightning overlays"></div>
+            <div class="map-legend-row"><span class="legend-title">REFLECTIVITY</span><span class="legend-gradient"></span><span class="legend-label">Light</span><span class="legend-label">Moderate</span><span class="legend-label">Heavy</span><span class="legend-label legend-extreme">Extreme</span><span class="map-credit">Map © OpenStreetMap · Radar © RainViewer · SPC © NOAA/NWS · MeteoAlarm © EUMETNET · LightningMaps/Blitzortung</span></div>
+            <div class="map-overlay-note" id="overview-overlay-status" aria-live="polite">SPC is U.S.-only; MeteoAlarm covers participating European countries. Lightning detections are not official warnings.</div>
           </article>
 
           <div class="overview-lower-grid">
