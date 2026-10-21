@@ -35,6 +35,111 @@ async function fetchText(url, options = {}) {
   return { response, text: await response.text() };
 }
 
+const METEOALARM_FEEDS = [
+  ['andorra', 'Andorra'], ['austria', 'Austria'], ['belgium', 'Belgium'], ['bosnia-herzegovina', 'Bosnia and Herzegovina'],
+  ['bulgaria', 'Bulgaria'], ['croatia', 'Croatia'], ['cyprus', 'Cyprus'], ['czechia', 'Czechia'], ['denmark', 'Denmark'],
+  ['estonia', 'Estonia'], ['finland', 'Finland'], ['france', 'France'], ['germany', 'Germany'], ['greece', 'Greece'],
+  ['hungary', 'Hungary'], ['iceland', 'Iceland'], ['ireland', 'Ireland'], ['israel', 'Israel'], ['italy', 'Italy'],
+  ['latvia', 'Latvia'], ['lithuania', 'Lithuania'], ['luxembourg', 'Luxembourg'], ['malta', 'Malta'], ['moldova', 'Moldova'],
+  ['montenegro', 'Montenegro'], ['netherlands', 'Netherlands'], ['republic-of-north-macedonia', 'North Macedonia'],
+  ['norway', 'Norway'], ['poland', 'Poland'], ['portugal', 'Portugal'], ['romania', 'Romania'], ['serbia', 'Serbia'],
+  ['slovakia', 'Slovakia'], ['slovenia', 'Slovenia'], ['spain', 'Spain'], ['sweden', 'Sweden'], ['switzerland', 'Switzerland'],
+  ['ukraine', 'Ukraine'], ['united-kingdom', 'United Kingdom']
+];
+
+function decodeXmlEntities(value) {
+  return String(value || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([\da-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+}
+
+function xmlLocalTagValues(source, tagName) {
+  const pattern = new RegExp(`<(?:(?:[\\w.-]+):)?${tagName}\\b[^>]*>([\\s\\S]*?)<\\/(?:(?:[\\w.-]+):)?${tagName}\\s*>`, 'gi');
+  return [...String(source).matchAll(pattern)]
+    .map(match => decodeXmlEntities(match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()))
+    .filter(Boolean);
+}
+
+function firstXmlLocalTag(source, names) {
+  for (const name of names) {
+    const value = xmlLocalTagValues(source, name)[0];
+    if (value) return value;
+  }
+  return '';
+}
+
+function parseMeteoPolygon(value) {
+  const clean = String(value || '').trim();
+  if (!clean) return null;
+  const pairs = [];
+  const commaPairs = clean.split(/\s+/).map(token => token.split(',').map(Number));
+  if (commaPairs.length >= 3 && commaPairs.every(pair => pair.length === 2 && pair.every(Number.isFinite))) {
+    for (const [lat, lon] of commaPairs) if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) pairs.push([lon, lat]);
+  } else {
+    const values = (clean.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+    for (let i = 0; i + 1 < values.length; i += 2) {
+      const lat = values[i], lon = values[i + 1];
+      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) pairs.push([lon, lat]);
+    }
+  }
+  if (pairs.length < 3) return null;
+  const first = pairs[0], last = pairs[pairs.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) pairs.push([...first]);
+  return { type: 'Polygon', coordinates: [pairs] };
+}
+
+function parseMeteoCircle(value) {
+  const match = String(value || '').trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s+([\d.]+)/);
+  if (!match) return null;
+  const lat = Number(match[1]), lon = Number(match[2]), radiusKm = Number(match[3]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(radiusKm) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || radiusKm <= 0 || radiusKm > 500) return null;
+  const points = [];
+  for (let i = 0; i <= 36; i++) {
+    const angle = (i / 36) * Math.PI * 2;
+    const dLat = (radiusKm / 111.32) * Math.sin(angle);
+    const dLon = (radiusKm / (111.32 * Math.max(.15, Math.cos(lat * Math.PI / 180)))) * Math.cos(angle);
+    points.push([lon + dLon, Math.max(-90, Math.min(90, lat + dLat))]);
+  }
+  return { type: 'Polygon', coordinates: [points] };
+}
+
+function parseMeteoAlarmAtom(xml, country) {
+  const entries = [...String(xml).matchAll(/<(?:[\w.-]+:)?entry\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?entry\s*>/gi)].map(match => match[1]);
+  const features = [];
+  for (const rawEntry of entries) {
+    const decodedEntry = decodeXmlEntities(rawEntry);
+    const entry = xmlLocalTagValues(rawEntry, 'polygon').length || xmlLocalTagValues(rawEntry, 'circle').length ? rawEntry : decodedEntry;
+    const title = firstXmlLocalTag(entry, ['headline', 'title', 'event']) || `Weather warning — ${country}`;
+    const event = firstXmlLocalTag(entry, ['event']) || title;
+    const severity = firstXmlLocalTag(entry, ['severity', 'awareness_level', 'awarenessLevel']) || 'Not specified';
+    const area = firstXmlLocalTag(entry, ['areaDesc', 'area', 'geographicalName']) || country;
+    const description = firstXmlLocalTag(entry, ['description', 'summary']) || '';
+    const effective = firstXmlLocalTag(entry, ['effective', 'onset']) || '';
+    const expires = firstXmlLocalTag(entry, ['expires', 'ends']) || '';
+    const geometries = [
+      ...xmlLocalTagValues(entry, 'polygon').map(parseMeteoPolygon).filter(Boolean),
+      ...xmlLocalTagValues(entry, 'circle').map(parseMeteoCircle).filter(Boolean),
+      ...xmlLocalTagValues(entry, 'posList').map(parseMeteoPolygon).filter(Boolean),
+      ...xmlLocalTagValues(entry, 'point').map(value => {
+        const nums = (value.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+        if (nums.length < 2) return null;
+        const [lat, lon] = nums;
+        return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { type: 'Point', coordinates: [lon, lat] } : null;
+      }).filter(Boolean)
+    ];
+    let url = '';
+    const href = entry.match(/<(?:(?:[\w.-]+):)?link\b[^>]*href=["']([^"']+)["']/i);
+    if (href) url = decodeXmlEntities(href[1]);
+    const properties = {
+      title, event, severity, area, description, effective, expires, country,
+      url: /^https:\/\//i.test(url) ? url : 'https://www.meteoalarm.org/en/live/'
+    };
+    for (const geometry of geometries) features.push({ type: 'Feature', geometry, properties });
+  }
+  return features;
+}
+
 function isUsPoint(lat, lon) {
   // Conservative CONUS + Alaska + Hawaii + Puerto Rico envelope. Border areas
   // may still be outside NWS coverage; the upstream response is treated safely.
@@ -177,6 +282,45 @@ export default async function handler(req, res) {
       };
       const portal = portalMap[country] || { name: 'WMO Severe Weather Information Centre', url: 'https://severeweather.wmo.int/', detail: 'Use the WMO global warning hub and the national meteorological authority. Direct in-app local warning feeds are not available for this country yet.' };
       return json(res, 200, { supported: false, provider: portal.name, country: country || 'Unknown', alerts: [], checkedAt: new Date().toISOString(), sourceUrl: portal.url, message: portal.detail }, 'public, s-maxage=120, stale-while-revalidate=300');
+    }
+
+    if (route === 'meteoalarm') {
+      // MeteoAlarm's newer EDR location-query endpoints require a re-user token;
+      // use the listed legacy Atom feeds, and preserve partial coverage when one feed fails.
+      const checkedAt = new Date().toISOString();
+      const results = await Promise.allSettled(METEOALARM_FEEDS.map(async ([slug, country]) => {
+        const feedUrl = `https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-${slug}`;
+        const { text: xml } = await fetchText(feedUrl, {
+          timeout: 4500,
+          headers: { Accept: 'application/atom+xml, application/xml;q=0.9, */*;q=0.7' }
+        });
+        return { country, features: parseMeteoAlarmAtom(xml, country) };
+      }));
+      const successful = results.filter(result => result.status === 'fulfilled');
+      const failedFeeds = results.length - successful.length;
+      const features = successful.flatMap(result => result.value.features);
+      const unique = new Map();
+      for (const feature of features) {
+        const p = feature.properties || {};
+        const key = `${p.country}|${p.title}|${p.area}|${JSON.stringify(feature.geometry)}`;
+        if (!unique.has(key)) unique.set(key, feature);
+      }
+      const finalFeatures = [...unique.values()];
+      return json(res, 200, {
+        provider: 'MeteoAlarm country Atom feeds',
+        attribution: 'MeteoAlarm / EUMETNET member national weather services',
+        available: successful.length > 0,
+        checkedAt,
+        feedCount: results.length,
+        successfulFeeds: successful.length,
+        failedFeeds,
+        features: finalFeatures,
+        message: successful.length === 0
+          ? 'MeteoAlarm feeds could not be reached. Open the official live map instead.'
+          : finalFeatures.length === 0
+            ? 'Country feeds were reachable but did not provide geographic areas that could be plotted. Open the official live map for details.'
+            : ''
+      }, 'public, s-maxage=240, stale-while-revalidate=480');
     }
 
     if (route === 'reports') {
