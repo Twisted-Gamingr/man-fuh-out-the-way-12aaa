@@ -1,0 +1,10 @@
+{
+  "name": "Atmos — Worldwide Weather Desk",
+  "short_name": "Atmos",
+  "description": "Worldwide radar, forecasts, severe weather awareness, and official warning resources.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1118",
+  "theme_color": "#0b1118",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

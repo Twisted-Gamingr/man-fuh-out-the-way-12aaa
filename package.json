@@ -1,0 +1,12 @@
+{
+  "name": "atmos-worldwide-weather-desk",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A fresh, global weather-awareness dashboard built for Vercel.",
+  "type": "module",
+  "engines": { "node": ">=20.19.0" },
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node --check app.js && node --check api/[route].js && node --check build.mjs"
+  }
+}

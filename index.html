@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1118">
+  <meta name="description" content="Atmos — a worldwide weather, radar, and severe-weather awareness dashboard.">
+  <title>Atmos — Worldwide Weather Desk</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="app-frame">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#overview" aria-label="Atmos overview">
+        <span class="brand-mark"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 25.5c-4.7-1-5.1-7.8.1-9.1 1.5-7.8 12.3-9.6 16.5-3.2 7.4-2.2 12.4 3 9.8 8.2 4.6 4.2-.3 10.3-5.3 9.2H13.7C10.8 30.6 8.7 28.5 8 25.5Z"/><path d="m17 26 4-7-1 6h5l-8 9 2-8Z"/></svg></span>
+        <span><strong>atmos</strong><small>WORLDWIDE WEATHER DESK</small></span>
+      </a>
+      <div class="sidebar-status"><span class="pulse-dot"></span><span id="system-status-label">LIVE DATA DESK</span><span class="live-tag">LIVE</span></div>
+      <div class="nav-caption">WEATHER DESK</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="overview"><span class="nav-icon">◫</span>Overview</button>
+        <button class="nav-item" data-view="radar"><span class="nav-icon">◉</span>Radar &amp; satellite</button>
+        <button class="nav-item" data-view="alerts"><span class="nav-icon">△</span>Warnings <span class="nav-count" id="sidebar-alert-count">—</span></button>
+        <button class="nav-item" data-view="outlooks"><span class="nav-icon">▤</span>Convective outlooks</button>
+        <button class="nav-item" data-view="lightning"><span class="nav-icon">ϟ</span>Lightning detector</button>
+        <button class="nav-item" data-view="reports"><span class="nav-icon">⌖</span>Spotter reports</button>
+      </nav>
+      <div class="nav-caption second-caption">MORE</div>
+      <nav class="main-nav" aria-label="More navigation">
+        <button class="nav-item" data-view="channels"><span class="nav-icon">▷</span>Weather channels</button>
+        <button class="nav-item" data-view="status"><span class="nav-icon">◌</span>Service status</button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span>Preferences</button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-bottom">
+        <div class="radar-badge"><span class="radar-rings"><i></i><i></i><i></i></span><span><b>Weather is global.</b><small>Stay aware, wherever you are.</small></span></div>
+        <p>Not an official warning service. Always follow local authorities.</p>
+        <a href="https://severeweather.wmo.int/" target="_blank" rel="noopener noreferrer">Global warnings by WMO ↗</a>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button>
+        <div class="breadcrumbs"><span>Atmos</span><span class="crumb-slash">/</span><strong id="page-crumb">Overview</strong></div>
+        <div class="top-actions">
+          <div class="local-time"><span class="tiny-dot"></span><span id="clock-label">Updating local time…</span></div>
+          <button class="icon-button" id="quick-notifications" title="Notification preferences" aria-label="Notification preferences">♧<span id="notification-dot" class="notification-dot"></span></button>
+          <button class="location-pill" id="location-pill"><span class="pin-icon">⌖</span><span id="location-pill-label">Choose location</span><span>⌄</span></button>
+        </div>
+      </header>
+
+      <div class="content-wrap">
+        <section class="view-panel" id="view-overview" data-panel="overview">
+          <div class="welcome-row">
+            <div>
+              <div class="eyebrow"><span class="eyebrow-line"></span>THE WORLD, RIGHT NOW <span class="eyebrow-date" id="today-date"></span></div>
+              <h1>Weather doesn't<br><em>wait.</em> Neither should you.</h1>
+              <p class="welcome-copy">A global view of the atmosphere, severe weather, and the signals worth watching.</p>
+            </div>
+            <div class="welcome-actions">
+              <button class="button button-primary" id="use-location-main"><span>⌖</span> Use my location</button>
+              <button class="button button-ghost" data-go="settings">Customize desk <span>↗</span></button>
+            </div>
+          </div>
+
+          <div class="quick-summary-grid">
+            <article class="panel current-panel">
+              <div class="panel-head"><div><span class="panel-kicker">LOCAL CONDITIONS</span><h2 id="weather-place">Choose a location</h2></div><span class="small-live"><i></i> LIVE</span></div>
+              <div class="current-weather-row">
+                <div class="weather-symbol" id="weather-symbol">☁</div>
+                <div><div class="current-temperature" id="current-temperature">—<span>°</span></div><div class="current-description" id="current-description">Location needed for local weather</div></div>
+                <div class="feels-like"><small>FEELS LIKE</small><b id="feels-like">—</b></div>
+              </div>
+              <div class="weather-metrics">
+                <div class="metric"><span class="metric-icon">≋</span><div><small>WIND</small><b id="wind-value">—</b></div></div>
+                <div class="metric"><span class="metric-icon">◉</span><div><small>HUMIDITY</small><b id="humidity-value">—</b></div></div>
+                <div class="metric"><span class="metric-icon">↘</span><div><small>PRECIP.</small><b id="precip-value">—</b></div></div>
+              </div>
+              <div class="weather-source-line"><span id="weather-updated">Weather data is not loaded yet.</span><a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo ↗</a></div>
+            </article>
+
+            <article class="panel watch-panel">
+              <div class="panel-head"><div><span class="panel-kicker">YOUR WARNING DESK</span><h2>What needs attention?</h2></div><span class="alert-hex">△</span></div>
+              <div class="watch-count"><strong id="alert-count">—</strong><span>active alerts<br>for this location</span></div>
+              <div class="watch-divider"></div>
+              <div class="watch-latest" id="watch-latest"><span class="soft-status-dot"></span><span>Select a location to check nearby warning coverage.</span></div>
+              <button class="text-button" data-go="alerts">View warning desk <span>→</span></button>
+              <div class="watch-footnote">Coverage depends on the official provider for your country.</div>
+            </article>
+          </div>
+
+          <div class="section-heading"><div><span class="panel-kicker">LIVE MOSAIC</span><h2>Radar at a glance</h2></div><button class="text-button" data-go="radar">Open radar workspace <span>↗</span></button></div>
+          <article class="panel map-panel">
+            <div class="map-toolbar">
+              <div class="map-mode-group"><button class="map-mode active" data-map-layer="radar">Radar</button><button class="map-mode" data-map-layer="base">Base map</button></div>
+              <div class="map-toolbar-right"><span class="map-data-status"><i></i><span id="radar-status">Loading radar frames</span></span><button class="mini-tool" id="map-home" title="Return to world view">◎ World</button></div>
+            </div>
+            <div id="overview-map" class="leaflet-map" aria-label="Worldwide weather radar map"></div>
+            <div class="map-legend-row"><span class="legend-title">REFLECTIVITY</span><span class="legend-gradient"></span><span class="legend-label">Light</span><span class="legend-label">Moderate</span><span class="legend-label">Heavy</span><span class="legend-label legend-extreme">Extreme</span><span class="map-credit">Map © OpenStreetMap · Radar © RainViewer</span></div>
+          </article>
+
+          <div class="overview-lower-grid">
+            <article class="panel outlook-mini-panel">
+              <div class="panel-head"><div><span class="panel-kicker">UNITED STATES</span><h2>SPC convective outlook</h2></div><span class="tag tag-blue">DAY 1</span></div>
+              <p>Storm Prediction Center risk areas, including tornado, wind, and hail probabilities.</p>
+              <div class="outlook-art"><div class="outlook-map-glow"></div><div class="risk-label risk-label-low">MRGL</div><div class="risk-label risk-label-slight">SLGT</div><div class="risk-label risk-label-enhanced">ENH</div><span class="outlook-art-caption">Official live product</span></div>
+              <a class="button button-outline full-button" href="https://www.spc.noaa.gov/products/outlook/" target="_blank" rel="noopener">Open today's SPC outlook ↗</a>
+            </article>
+            <article class="panel global-mini-panel">
+              <div class="panel-head"><div><span class="panel-kicker">WORLDWIDE</span><h2>Severe weather alerts</h2></div><span class="tag tag-green">WMO</span></div>
+              <p>National warning information gathered by the World Meteorological Organization, spanning participating members around the world.</p>
+              <div class="global-stat"><span class="global-stat-icon">◎</span><div><strong>Global warning hub</strong><small>Coverage varies by national service</small></div></div>
+              <a class="button button-outline full-button" href="https://severeweather.wmo.int/" target="_blank" rel="noopener">Open global warning map ↗</a>
+            </article>
+          </div>
+
+          <div class="section-heading"><div><span class="panel-kicker">REGIONAL DESK</span><h2>Official warning centers</h2></div><span class="section-subcopy">Open the authority for your area</span></div>
+          <div class="region-shortcuts" id="region-shortcuts">
+            <button class="region-card" data-region="north-america"><span class="region-icon">⌖</span><span><b>North America</b><small>NWS · Canada · Mexico</small></span><span class="region-arrow">↗</span></button>
+            <button class="region-card" data-region="europe"><span class="region-icon">⌖</span><span><b>Europe</b><small>MeteoAlarm · Met Office</small></span><span class="region-arrow">↗</span></button>
+            <button class="region-card" data-region="asia"><span class="region-icon">⌖</span><span><b>Asia</b><small>JMA · IMD · regional centres</small></span><span class="region-arrow">↗</span></button>
+            <button class="region-card" data-region="oceania"><span class="region-icon">⌖</span><span><b>Oceania</b><small>BOM · MetService · Fiji Met</small></span><span class="region-arrow">↗</span></button>
+          </div>
+          <div class="disclaimer-bar"><span class="disclaimer-icon">i</span><span><b>Important:</b> This website was made with ChatGPT. Expect errors. Atmos is not an official emergency alert service. Check your national meteorological agency for life-safety decisions.</span></div>
+        </section>
+
+        <section class="view-panel hidden" id="view-radar" data-panel="radar">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>ATMOSPHERIC OBSERVATION</div><h1>Radar &amp; satellite</h1><p class="page-lead">Explore the planet's radar mosaic. Coverage depends on the radar stations contributing to the global network.</p></div><button class="button button-primary" id="radar-locate">⌖ Center on my location</button></div>
+          <article class="panel map-panel large-map-panel"><div class="map-toolbar"><div class="map-mode-group"><button class="map-mode active" data-map-layer="radar">Radar mosaic</button><button class="map-mode" data-map-layer="base">Base map</button></div><div class="map-toolbar-right"><span class="map-data-status"><i></i><span id="radar-status-large">Waiting for radar data</span></span><button class="mini-tool" id="radar-refresh">↻ Refresh</button></div></div><div id="radar-map" class="leaflet-map" aria-label="Global radar explorer map"></div><div class="radar-playback"><button id="radar-play" class="play-button" aria-label="Play radar animation">▶</button><div class="timeline-wrap"><div class="timeline-labels"><span>OLDER</span><span id="radar-frame-time">Latest available frame</span><span>NOW</span></div><input type="range" id="radar-timeline" min="0" max="0" value="0" aria-label="Radar time frame"></div><span class="tag tag-subtle">10 MIN FRAMES</span></div><div class="map-legend-row"><span class="legend-title">REFLECTIVITY</span><span class="legend-gradient"></span><span class="legend-label">Light</span><span class="legend-label">Moderate</span><span class="legend-label">Heavy</span><span class="legend-label legend-extreme">Extreme</span><span class="map-credit">Weather data by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> · © OpenStreetMap</span></div></article>
+          <div class="info-note"><b>About this mosaic</b><span>RainViewer publishes radar tiles from participating networks across many countries. It is a best-effort community product, not a guaranteed global composite; some regions will have gaps or delayed scans. Satellite products are available from official links below.</span></div>
+          <div class="overview-lower-grid"><article class="panel source-panel"><span class="panel-kicker">SATELLITE</span><h2>Global satellite imagery</h2><p>View full-disk and regional imagery from official weather agencies.</p><a class="source-link" href="https://www.star.nesdis.noaa.gov/GOES/" target="_blank" rel="noopener">NOAA GOES imagery ↗</a><a class="source-link" href="https://view.eumetsat.int/" target="_blank" rel="noopener">EUMETSAT viewer ↗</a><a class="source-link" href="https://www.data.jma.go.jp/mscweb/data/himawari/" target="_blank" rel="noopener">JMA Himawari imagery ↗</a></article><article class="panel source-panel"><span class="panel-kicker">LOCAL RADAR</span><h2>Find a national radar</h2><p>National services often offer higher-resolution radar than global mosaics.</p><a class="source-link" href="https://weather.gc.ca/radar/index_e.html" target="_blank" rel="noopener">Canada radar ↗</a><a class="source-link" href="https://www.metoffice.gov.uk/weather/maps-and-charts/rainfall-radar-forecast-map" target="_blank" rel="noopener">UK rainfall radar ↗</a><a class="source-link" href="https://www.bom.gov.au/australia/radar/" target="_blank" rel="noopener">Australia radar ↗</a></article></div>
+        </section>
+
+        <section class="view-panel hidden" id="view-alerts" data-panel="alerts">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>ALERT AWARENESS</div><h1>Warning desk</h1><p class="page-lead">Location-aware official warnings where a machine-readable feed is available, plus global national alert portals.</p></div><button class="button button-primary" id="alerts-refresh">↻ Refresh warnings</button></div>
+          <div class="alert-status-banner" id="alerts-status-banner"><span class="alert-banner-icon">△</span><div><b>Location not set</b><span>Choose your location to check local warning coverage.</span></div><button class="button button-ghost" id="alerts-set-location">Set location</button></div>
+          <div class="alert-results-grid"><article class="panel"><div class="panel-head"><div><span class="panel-kicker">NEAR YOUR LOCATION</span><h2>Active official alerts</h2></div><span class="tag tag-subtle" id="alerts-feed-tag">NO LOCATION</span></div><div id="alerts-list" class="alerts-list"><div class="empty-state"><span>△</span><b>No location selected</b><p>Set a location to query compatible official alert feeds.</p></div></div><div class="panel-footnote">When a direct live feed is unavailable, this list will say so explicitly instead of inventing alerts.</div></article><article class="panel worldwide-alert-card"><div class="panel-head"><div><span class="panel-kicker">GLOBAL VIEW</span><h2>WMO warning map</h2></div><span class="tag tag-green">OFFICIAL HUB</span></div><p>The WMO Severe Weather Information Centre displays CAP warnings from participating national services. Some countries' feeds may be incomplete or inaccessible.</p><div class="wmo-preview"><span class="wmo-orbit">◎</span><div><strong>Severe Weather Information Centre</strong><small>Global Multi-hazard Alert System</small></div><span class="wmo-arrow">↗</span></div><a class="button button-primary full-button" href="https://severeweather.wmo.int/" target="_blank" rel="noopener">Open the worldwide warning map</a><small class="subtle-line">The live WMO view opens in a new tab to preserve its official map controls.</small></article></div>
+          <div class="section-heading"><div><span class="panel-kicker">OFFICIAL SOURCES</span><h2>National warning services</h2></div></div>
+          <div class="official-grid" id="official-grid"></div>
+        </section>
+
+        <section class="view-panel hidden" id="view-outlooks" data-panel="outlooks">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>CONVECTIVE GUIDANCE</div><h1>Outlooks &amp; forecast products</h1><p class="page-lead">Daily severe-weather outlooks are national products, not a single worldwide forecast. Each panel links to the issuing authority.</p></div></div>
+          <div class="outlook-grid"><article class="panel outlook-card"><div class="panel-head"><div><span class="panel-kicker">UNITED STATES · SPC</span><h2>Day 1 convective outlook</h2></div><span class="tag tag-blue">NOAA</span></div><div class="spc-image-frame"><img src="https://www.spc.noaa.gov/products/outlook/day1otlk.gif" alt="Latest official SPC Day 1 convective outlook map" loading="lazy" onerror="this.style.display='none';this.parentElement.classList.add('image-unavailable')"><div class="image-fallback"><span>SPC</span><b>Today's official outlook</b><small>The product image may be unavailable here. Open the official product page.</small></div></div><p>Risk areas for severe thunderstorms, including tornadoes, damaging winds, and large hail. Check issuance time and discussion on the official page.</p><a class="button button-primary full-button" href="https://www.spc.noaa.gov/products/outlook/" target="_blank" rel="noopener">Open SPC outlooks ↗</a><div class="outlook-links"><a href="https://www.spc.noaa.gov/products/md/" target="_blank" rel="noopener">Mesoscale discussions ↗</a><a href="https://www.spc.noaa.gov/products/watch/" target="_blank" rel="noopener">Severe weather watches ↗</a></div></article>
+          <article class="panel outlook-card"><div class="panel-head"><div><span class="panel-kicker">CANADA · ECCC</span><h2>Canadian national outlook</h2></div><span class="tag tag-red">ECCC</span></div><div class="canada-art"><div class="canada-grid"></div><div class="canada-art-overlay"><span>CANADA</span><b>Forecasts &amp; warnings</b><small>Environment and Climate Change Canada</small></div></div><p>Canada does not publish a direct equivalent to the SPC convective risk scale for the entire country. Use ECCC regional forecasts, weather alerts, radar, and storm-related warnings.</p><a class="button button-primary full-button" href="https://weather.gc.ca/canada_e.html" target="_blank" rel="noopener">Open Canada forecast map ↗</a><div class="outlook-links"><a href="https://weather.gc.ca/warnings/index_e.html" target="_blank" rel="noopener">Active warnings ↗</a><a href="https://weather.gc.ca/radar/index_e.html" target="_blank" rel="noopener">Radar ↗</a></div></article>
+          <article class="panel outlook-card"><div class="panel-head"><div><span class="panel-kicker">EUROPE · METEOALARM</span><h2>European warning overview</h2></div><span class="tag tag-green">EUMETNET</span></div><div class="europe-art"><div class="europe-lines"></div><span>EARLY WARNINGS FOR EUROPE</span><div class="europe-levels"><i></i><i></i><i></i><i></i></div></div><p>National meteorological and hydrological services issue the warnings aggregated by MeteoAlarm. Severity colors and hazards vary by country.</p><a class="button button-primary full-button" href="https://www.meteoalarm.org/en/live/" target="_blank" rel="noopener">Open MeteoAlarm live map ↗</a><div class="outlook-links"><a href="https://api.meteoalarm.org/" target="_blank" rel="noopener">API information ↗</a><a href="https://severeweather.wmo.int/" target="_blank" rel="noopener">WMO global alerts ↗</a></div></article>
+          <article class="panel outlook-card"><div class="panel-head"><div><span class="panel-kicker">ASIA &amp; OCEANIA</span><h2>Regional severe weather</h2></div><span class="tag tag-purple">GLOBAL</span></div><div class="asia-art"><div class="asia-rings"></div><span>REGIONAL GUIDANCE</span></div><p>Outlooks and warnings are issued locally in this region. Choose the relevant national authority for typhoons, monsoon rain, tropical cyclones, heat, fire weather, and severe storms.</p><a class="button button-primary full-button" href="https://severeweather.wmo.int/" target="_blank" rel="noopener">Open global warning hub ↗</a><div class="outlook-links"><a href="https://www.jma.go.jp/bosai/map.html#contents=warning" target="_blank" rel="noopener">Japan JMA ↗</a><a href="https://www.bom.gov.au/australia/" target="_blank" rel="noopener">Australia BOM ↗</a></div></article></div>
+        </section>
+
+        <section class="view-panel hidden" id="view-lightning" data-panel="lightning">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>ATMOSPHERIC ELECTRICITY</div><h1>Lightning detector</h1><p class="page-lead">Live lightning activity from the community network at LightningMaps.org.</p></div><a class="button button-primary" href="https://www.lightningmaps.org/" target="_blank" rel="noopener">Open LightningMaps ↗</a></div>
+          <article class="panel lightning-panel"><div class="panel-head"><div><span class="panel-kicker">COMMUNITY DETECTION NETWORK</span><h2>Live strike map</h2></div><span class="small-live"><i></i> LIVE SOURCE</span></div><div class="lightning-frame-wrap"><iframe id="lightning-frame" src="https://www.lightningmaps.org/" title="LightningMaps.org live lightning map" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="external-fallback"><span class="lightning-large">ϟ</span><b>LightningMaps.org</b><p>If the live map is blocked by browser privacy or frame restrictions, open it directly.</p><a class="button button-primary" href="https://www.lightningmaps.org/" target="_blank" rel="noopener">Open live detector ↗</a></div></div><div class="panel-footnote">LightningMaps/Blitzortung is a community-based detection network for awareness and entertainment, not an official warning service. Detection density and timing vary by region.</div></article>
+          <div class="overview-lower-grid"><article class="panel source-panel"><span class="panel-kicker">LIGHTNING SAFETY</span><h2>When thunder roars</h2><p>Move indoors to a substantial building or a hard-topped vehicle when thunder is heard. Avoid exposed ridges, open fields, isolated trees, and water.</p><a class="source-link" href="https://www.weather.gov/safety/lightning" target="_blank" rel="noopener">NWS lightning safety ↗</a></article><article class="panel source-panel"><span class="panel-kicker">OFFICIAL INFORMATION</span><h2>Warnings beat maps</h2><p>Lightning detections are not a substitute for official thunderstorm alerts. Use your national meteorological service for safety warnings.</p><a class="source-link" href="https://severeweather.wmo.int/" target="_blank" rel="noopener">WMO severe weather alerts ↗</a></article></div>
+        </section>
+
+        <section class="view-panel hidden" id="view-reports" data-panel="reports">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>FIELD OBSERVATIONS</div><h1>Storm spotter reports</h1><p class="page-lead">Publicly available storm reports are preliminary observations, not confirmed damage surveys. Skywarn reporting routes vary by local NWS office.</p></div><button class="button button-primary" id="reports-refresh">↻ Refresh reports</button></div>
+          <div class="report-top-grid"><article class="panel reports-panel"><div class="panel-head"><div><span class="panel-kicker">SPC · UNITED STATES</span><h2>Preliminary storm reports</h2></div><span class="tag tag-blue">NWS/SPC</span></div><div id="reports-content" class="reports-content"><div class="loading-row"><span class="loader"></span>Checking the public report product…</div></div><a class="button button-outline full-button" href="https://www.spc.noaa.gov/climo/reports/today.html" target="_blank" rel="noopener">Open today's SPC reports ↗</a><div class="panel-footnote">SPC storm reports are preliminary and can be updated or reclassified. An absence of listed reports does not prove that no hazardous weather occurred.</div></article><article class="panel skywarn-panel"><span class="panel-kicker">VOLUNTEER SPOTTERS</span><div class="skywarn-mark">⌖</div><h2>SKYWARN</h2><p>The National Weather Service's volunteer storm spotter program trains people to report relevant weather observations to their local office.</p><a class="button button-primary full-button" href="https://www.weather.gov/skywarn/" target="_blank" rel="noopener">SKYWARN information ↗</a><a class="source-link" href="https://www.weather.gov/skywarn/skywarn.htm" target="_blank" rel="noopener">Find training &amp; your local office ↗</a><div class="subtle-line">Only send reports using your local authority's preferred method. Never put yourself in danger to observe a storm.</div></article></div>
+          <article class="panel info-panel"><span class="info-icon">i</span><div><b>International observations</b><p>There is no single, universally accessible public SKYWARN report feed for every country. For global severe-weather observations and national reporting services, use the WMO hub and the relevant national weather agency.</p><a href="https://severeweather.wmo.int/" target="_blank" rel="noopener">WMO global severe-weather information ↗</a></div></article>
+        </section>
+
+        <section class="view-panel hidden" id="view-channels" data-panel="channels">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>PEOPLE WHO FOLLOW THE SKY</div><h1>Weather channels</h1><p class="page-lead">A curated starting list of meteorologists, storm chasers, independent weather explainers, and official forecast services.</p></div></div>
+          <div class="channel-filter-row"><div class="channel-filters"><button class="chip active" data-channel-filter="all">All channels</button><button class="chip" data-channel-filter="meteorologist">Meteorologists</button><button class="chip" data-channel-filter="chaser">Storm chasers</button><button class="chip" data-channel-filter="official">Official services</button></div><label class="search-field channel-search"><span>⌕</span><input type="search" id="channel-search" placeholder="Find a channel…" aria-label="Search channels"></label></div>
+          <div class="channels-grid" id="channels-grid"></div>
+          <div class="info-note"><b>Editorial note</b><span>These are independent or official sources selected as a starting point, not endorsements. Advice can differ between creators; official warnings and instructions from local authorities take priority.</span></div>
+        </section>
+
+        <section class="view-panel hidden" id="view-status" data-panel="status">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>UPSTREAM HEALTH</div><h1>Service status</h1><p class="page-lead">Checks whether the providers Atmos depends on can be reached. A response does not guarantee data completeness or accuracy.</p></div><button class="button button-primary" id="status-refresh">↻ Run checks</button></div>
+          <article class="panel status-summary-panel"><div class="status-summary-icon" id="status-summary-icon">◌</div><div><span class="panel-kicker">LAST CHECK</span><h2 id="status-summary-title">Not checked yet</h2><p id="status-summary-copy">Run service checks to query upstream providers.</p></div><div class="status-summary-time" id="status-summary-time">—</div></article>
+          <div id="service-status-grid" class="service-status-grid"><div class="panel loading-card"><span class="loader"></span>Checking providers…</div></div>
+          <div class="info-note"><b>How to read this page</b><span>“Reachable” means the service returned a response to a basic probe. “Degraded” can indicate a rate limit, endpoint policy, or temporary issue. Status checks are snapshots, not provider SLAs. Some links are official portals without a machine-readable local feed.</span></div>
+        </section>
+
+        <section class="view-panel hidden" id="view-settings" data-panel="settings">
+          <div class="page-title-row"><div><div class="eyebrow"><span class="eyebrow-line"></span>YOUR WEATHER DESK</div><h1>Preferences</h1><p class="page-lead">Set your location, tune the display, and choose which local alert categories should trigger browser notifications.</p></div></div>
+          <div class="settings-grid"><article class="panel settings-panel"><div class="panel-head"><div><span class="panel-kicker">LOCATION</span><h2>Your reference point</h2></div><span class="settings-icon">⌖</span></div><p>Atmos uses your selected location to request weather and supported warning feeds. Your coordinates are stored locally in this browser.</p><div class="location-controls"><button class="button button-primary" id="settings-use-location">⌖ Use device location</button><div class="divider-label"><span></span>OR SEARCH A PLACE<span></span></div><div class="search-field place-search"><span>⌕</span><input id="place-search" type="search" placeholder="City, region or country"><button id="place-search-button" aria-label="Search places">→</button></div><div class="search-results" id="place-results"></div></div><div class="current-location-card"><span class="location-card-icon">⌖</span><span><small>SELECTED LOCATION</small><b id="settings-location-name">World view</b><small id="settings-location-coords">No personal location stored</small></span><button id="clear-location" class="tiny-clear">Clear</button></div></article>
+          <article class="panel settings-panel"><div class="panel-head"><div><span class="panel-kicker">VISUAL IDENTITY</span><h2>Make it yours</h2></div><span class="settings-icon">◐</span></div><p>Choose a preset. Your changes stay in this browser.</p><label class="field-label" for="theme-select">Theme preset</label><select class="form-select" id="theme-select"><option value="midnight">Midnight radar</option><option value="storm">Storm glass</option><option value="glacier">Glacier</option><option value="daylight">Daylight</option><option value="radar">Radar phosphor</option><option value="ember">Ember</option><option value="aurora">Aurora</option><option value="paper">Paper charts</option></select><label class="field-label" for="accent-color">Accent color</label><div class="color-control"><input type="color" id="accent-color" value="#8ce0c2"><span>Custom interface accent</span><button id="reset-accent" class="tiny-clear">Reset</button></div><label class="field-label" for="units-select">Temperature units</label><select class="form-select" id="units-select"><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select><div class="theme-swatches"><button data-preset="midnight" class="theme-swatch swatch-midnight" title="Midnight radar"></button><button data-preset="storm" class="theme-swatch swatch-storm" title="Storm glass"></button><button data-preset="glacier" class="theme-swatch swatch-glacier" title="Glacier"></button><button data-preset="daylight" class="theme-swatch swatch-daylight" title="Daylight"></button><button data-preset="radar" class="theme-swatch swatch-radar" title="Radar phosphor"></button><button data-preset="ember" class="theme-swatch swatch-ember" title="Ember"></button><button data-preset="aurora" class="theme-swatch swatch-aurora" title="Aurora"></button><button data-preset="paper" class="theme-swatch swatch-paper" title="Paper charts"></button></div></article>
+          <article class="panel settings-panel notification-settings"><div class="panel-head"><div><span class="panel-kicker">BROWSER ALERTS</span><h2>Notification preferences</h2></div><span class="settings-icon">♧</span></div><p>Enable desktop notifications while Atmos is open. Supported live push checks depend on your country's accessible official feed.</p><div class="notification-callout"><span class="notification-callout-icon">♧</span><div><b id="notification-permission-title">Permission not requested</b><small id="notification-permission-copy">Your browser will ask before desktop notifications can be sent.</small></div><button class="button button-outline" id="enable-notifications">Enable</button></div><div class="setting-toggle-row"><span><b>Tornado warnings</b><small>Highest-priority tornado-related alerts</small></span><input type="checkbox" id="notify-tornado" checked></div><div class="setting-toggle-row"><span><b>Severe thunderstorms</b><small>Severe thunderstorm warnings and equivalent alerts</small></span><input type="checkbox" id="notify-thunderstorm" checked></div><div class="setting-toggle-row"><span><b>Flooding</b><small>Flood, flash-flood and major rainfall warnings</small></span><input type="checkbox" id="notify-flood" checked></div><div class="setting-toggle-row"><span><b>All severe / extreme alerts</b><small>Other high-impact warnings from supported feeds</small></span><input type="checkbox" id="notify-severe" checked></div><label class="field-label" for="polling-select">Alert check interval</label><select class="form-select" id="polling-select"><option value="120000">Every 2 minutes</option><option value="300000">Every 5 minutes</option><option value="600000">Every 10 minutes</option></select><div class="panel-footnote">Browser notifications are not a replacement for official emergency alerts. The browser or computer may pause checks when the site is closed or suspended.</div></article>
+          <article class="panel settings-panel"><div class="panel-head"><div><span class="panel-kicker">DATA &amp; PRIVACY</span><h2>Local-only preferences</h2></div><span class="settings-icon">⌑</span></div><div class="privacy-points"><p><b>Location</b><span>Stored in this browser's local storage unless you clear it.</span></p><p><b>Notifications</b><span>Only displayed through your browser after permission is granted.</span></p><p><b>External data</b><span>Weather and radar requests go to the named third-party providers.</span></p></div><button class="button button-outline full-button" id="reset-preferences">Reset all Atmos preferences</button><p class="small-help">This clears local site preferences; it does not revoke browser notification permission.</p></article></div>
+        </section>
+
+        <footer class="site-footer"><a class="footer-brand" href="#overview"><span class="footer-mark">◉</span> atmos</a><span>Made for weather awareness · Not an official emergency alert service</span><span>“This website was made with ChatGPT. Expect errors.”</span></footer>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="location-modal" role="dialog" aria-modal="true" aria-labelledby="location-modal-title">
+    <div class="location-modal panel"><button class="modal-close" id="close-location-modal" aria-label="Close">×</button><span class="modal-symbol">⌖</span><div class="eyebrow"><span class="eyebrow-line"></span>PERSONALIZE ATMOS</div><h2 id="location-modal-title">Where should we watch?</h2><p>Choose whether to share your device location or search for a place. Your choice sets the local weather and supported nearby warnings.</p><button class="button button-primary full-button" id="modal-use-location">Use my device location</button><div class="divider-label"><span></span>OR ENTER A PLACE<span></span></div><div class="search-field place-search"><span>⌕</span><input id="modal-place-search" type="search" placeholder="Search city or region"><button id="modal-place-search-button" aria-label="Search places">→</button></div><div class="search-results" id="modal-place-results"></div><button class="text-button modal-world-button" id="keep-world-view">Continue with world view →</button><p class="modal-privacy">No location is requested until you click the location button. You can change or clear it anytime.</p></div>
+  </div>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
